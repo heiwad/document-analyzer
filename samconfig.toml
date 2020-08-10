@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "analyze-documents"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1518fau2whetk"
+s3_prefix = "analyze-documents"
+region = "us-west-2"
+capabilities = "CAPABILITY_IAM"
+
