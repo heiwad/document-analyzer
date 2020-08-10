@@ -29,6 +29,38 @@ Resources:
           Properties:
             Bucket: !Ref SrcBucket
             Events: s3:ObjectCreated:*
+      Policies:
+        - Statement:
+          - Sid: Comprehend
+            Effect: Allow
+            Action:
+            - comprehend:DetectEntities
+            - comprehend:BatchDetectEntities
+            Resource: '*'
+        - Statement:
+          - Sid: Textract
+            Effect: Allow
+            Action:
+            - textract:DetectDocumentText
+            - textract:StartDocumentTextDetection
+            - textract:StartDocumentAnalysis
+            - textract:AnalyzeDocument
+            Resource: '*'
+        - Statement:
+          - Sid: S3
+            Effect: Allow
+            Action:
+            - s3:getObject
+            - s3:getObjectVersion
+            Resource: "*"
+        - Statement:
+          - Sid: DynamoDB
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            Resource: "*"
   SrcBucket:
     Type: AWS::S3::Bucket
 

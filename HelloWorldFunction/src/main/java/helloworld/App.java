@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,12 +12,9 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 
 import com.amazonaws.services.lambda.runtime.events.S3Event;
-
 import com.amazonaws.services.s3.event.S3EventNotification.S3EventNotificationRecord;
 
-
 import com.amazonaws.services.textract.model.S3Object;
-
 import com.amazonaws.services.textract.AmazonTextract;
 import com.amazonaws.services.textract.AmazonTextractClientBuilder;
 import com.amazonaws.services.textract.model.*;
@@ -31,7 +26,6 @@ import com.amazonaws.services.comprehend.model.BatchDetectEntitiesRequest;
 import com.amazonaws.services.comprehend.model.BatchDetectEntitiesResult;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.BatchWriteItemOutcome;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
@@ -58,7 +52,6 @@ public class App implements RequestHandler<S3Event, String> {
 
       //  try {
             S3EventNotificationRecord record = s3event.getRecords().get(0);
-            
             String srcBucket = record.getS3().getBucket().getName();
 
             // Object key may have spaces or unicode non-ASCII characters.
@@ -78,6 +71,9 @@ public class App implements RequestHandler<S3Event, String> {
                 return "";
             }
 
+            System.out.println("Invoked with valid document: " + srcBucket + "/" + srcKey);
+
+            System.out.println("Using textract to identify text");
             // Use Textract to process the document
             List<Block> blocks = extractText(srcBucket, srcKey);
 
@@ -87,12 +83,14 @@ public class App implements RequestHandler<S3Event, String> {
             List<String> text = processed.get(1);
 
             //Use Comprehend to process the text.
+            System.out.println("Using comprehend to process entities");
             List<BatchDetectEntitiesItemResult> entities = getEntities(text);
 
             
 
             System.out.println(entities.toString());
 
+            System.out.println("Saving analysis to dynamodb");
             writeDocumentToDynamoDB(ids, text, entities, srcKey);
 
         return srcKey;    
@@ -113,15 +111,19 @@ public class App implements RequestHandler<S3Event, String> {
         return result.getBlocks();
 
     }
-
+    
     private List<List<String>> getText(List<Block> blocks) {
-
+        System.out.println("Analyzing " + String.valueOf(blocks.size()) + " blocks of text");
         List<String> ids = new ArrayList<String>();
         List<String> text = new ArrayList<String>();
 
         blocks.forEach((block) -> {
+            
+            if ( (block.getBlockType() == "LINE") && !(block.getText() == null)){
             ids.add(block.getId());
             text.add(block.getText());
+            System.out.println(block.getText());
+            }
         });
 
         List<List<String>> processed = new ArrayList<List<String>>();
@@ -132,17 +134,31 @@ public class App implements RequestHandler<S3Event, String> {
     }
 
     private List<BatchDetectEntitiesItemResult> getEntities(List<String> text) {
-
+        // Issue: Initializing client each time instead outside lambda handler| This is detected by CodeGuru
         AmazonComprehend comprehendClient = AmazonComprehendClientBuilder.standard().build();
+        List<BatchDetectEntitiesItemResult> results = new ArrayList<BatchDetectEntitiesItemResult>();
 
-        // ISSUE: Hard-coded the language to english. Jon should catch this.
-        BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(text)
+        int current = 0;
+        int BATCH_SIZE = 25;
+        while (current < text.size() +1) {
+            int step = Math.min(text.size() - current, BATCH_SIZE);
+            List<String> batchText = text.subList(current, current + step);
+            System.out.println("Submitting blocks to comprehend: " + String.valueOf(current) + " - " + String.valueOf(current + step));
+
+            // ISSUE: Hard-coded the language to english. Jon should catch this.
+            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(batchText)
                 .withLanguageCode("en");
-        BatchDetectEntitiesResult batchDetectEntitiesResult = comprehendClient
+
+            BatchDetectEntitiesResult batchDetectEntitiesResult = comprehendClient
                 .batchDetectEntities(batchDetectEntitiesRequest);
-        
-        //ISSUE: Batch detect could have some failed entries but I didn't check and retry.
-        List<BatchDetectEntitiesItemResult> results = batchDetectEntitiesResult.getResultList();
+
+            //ISSUE: Batch detect could have some failed entries but I didn't check and retry. This was caught in the DynamoDB sample but not here?
+            results.addAll(batchDetectEntitiesResult.getResultList());
+
+             current = current + step;
+
+        }
+
 
         return results;
 
@@ -150,6 +166,10 @@ public class App implements RequestHandler<S3Event, String> {
 
     private static void writeDocumentToDynamoDB(List<String> ids, List<String> text,
             List<BatchDetectEntitiesItemResult> entities, String srcKey) {
+
+        System.out.println("Size of ids: " + String.valueOf(ids.size()));
+        System.out.println("Size of text: " + String.valueOf(text.size()));
+        System.out.println("Size of entities: " + String.valueOf(entities.size()));
 
         AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
         DynamoDB dynamoDB = new DynamoDB(ddb);
