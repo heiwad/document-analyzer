@@ -1,0 +1,5 @@
+Bugs:
+
+Array bounds on Paginating through list and breaking it up into chunks for entities
+Filtering out duplication of words and lines of text
+Comprehend entity extraction is returning nothing.
