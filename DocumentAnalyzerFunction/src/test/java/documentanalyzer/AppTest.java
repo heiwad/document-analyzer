@@ -1,4 +1,4 @@
-package helloworld;
+package documentanalyzer;
 
 
 import com.amazonaws.services.lambda.runtime.events.S3Event;

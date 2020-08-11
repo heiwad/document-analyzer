@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'document-describer
+Description: 'Document-Analyzer
 
-  Sample SAM Template for document-describer
+  Sample SAM Template for Document-Analyzer
 
   '
 Globals:
@@ -13,7 +13,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: AnalyzeDocument
-      Handler: helloworld.App::handleRequest
+      Handler: documentanalyzer.App::handleRequest
       Runtime: java11
       MemorySize: 512
       Environment:
@@ -35,6 +35,38 @@ Resources:
             Bucket:
               Ref: SrcBucket
             Events: s3:ObjectCreated:*
+      Policies:
+      - Statement:
+        - Sid: Comprehend
+          Effect: Allow
+          Action:
+          - comprehend:DetectEntities
+          - comprehend:BatchDetectEntities
+          Resource: '*'
+      - Statement:
+        - Sid: Textract
+          Effect: Allow
+          Action:
+          - textract:DetectDocumentText
+          - textract:StartDocumentTextDetection
+          - textract:StartDocumentAnalysis
+          - textract:AnalyzeDocument
+          Resource: '*'
+      - Statement:
+        - Sid: S3
+          Effect: Allow
+          Action:
+          - s3:getObject
+          - s3:getObjectVersion
+          Resource: '*'
+      - Statement:
+        - Sid: DynamoDB
+          Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:BatchWriteItem
+          Resource: '*'
   SrcBucket:
     Type: AWS::S3::Bucket
   DynamoDBTable:
