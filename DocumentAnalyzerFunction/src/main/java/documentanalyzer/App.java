@@ -70,25 +70,36 @@ public class App  {
         // Object key may have spaces or unicode non-ASCII characters.
         String srcKey = record.getS3().getObject().getUrlDecodedKey();
 
+
+        if (!isSupportedDocument(srcBucket, srcKey)) {
+            System.out.println("Document type not supported. Nothing to do for: " + srcBucket + "/" + srcKey);
+            return;
+        }
+        
+        System.out.println("Invoked with valid document: " + srcBucket + "/" + srcKey);
+
+        processDocument(srcBucket, srcKey);
+
+        return;
+
+    }
+
+    private boolean isSupportedDocument(String srcBucket, String srcKey) {
         // Infer the image type from the file name.
-         Matcher matcher = Pattern.compile(".*\\.([^\\.]*)").matcher(srcKey.toLowerCase());
+        Matcher matcher = Pattern.compile(".*\\.([^\\.]*)").matcher(srcKey.toLowerCase());
         if (!matcher.matches()) {
             System.out.println("Unable to infer image type for key " + srcKey);
-            return;
+            return false;
         }
 
         //TODO: Implement support for extracting images from PDF document.
         String imageType = matcher.group(1);
         if (!(JPG_TYPE.equals(imageType)) && !(PNG_TYPE.equals(imageType))) {
             System.out.println("Skipping non-image " + srcKey);    
-            return;
+            return false;
         }
 
-        System.out.println("Invoked with valid document: " + srcBucket + "/" + srcKey);
-
-        processDocument(srcBucket, srcKey);
-
-        return;
+        return true;
 
     }
 
