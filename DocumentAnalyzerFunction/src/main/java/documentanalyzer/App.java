@@ -45,9 +45,9 @@ public class App implements RequestHandler<S3Event, String> {
     private final String TABLE_RANGE;
     private final int MAX_TEXTRACT_BATCH_SIZE = 25;
     private final int MAX_DYNAMODB_BATCH_SIZE = 25;
+    
     private final AmazonDynamoDB ddb;
     private final DynamoDB dynamoDB;
-
     private final AmazonTextract textract;
 
     public App() {
@@ -63,21 +63,21 @@ public class App implements RequestHandler<S3Event, String> {
 
     }
 
-    public String handleRequest(final S3Event s3event, final Context context) {
+    public String handleRequest(S3Event s3event,  Context context) {
 
-        final S3EventNotificationRecord record = s3event.getRecords().get(0);
-        final String srcBucket = record.getS3().getBucket().getName();
+        S3EventNotificationRecord record = s3event.getRecords().get(0);
+        String srcBucket = record.getS3().getBucket().getName();
         // Object key may have spaces or unicode non-ASCII characters.
-        final String srcKey = record.getS3().getObject().getUrlDecodedKey();
+        String srcKey = record.getS3().getObject().getUrlDecodedKey();
 
         // Infer the image type from the file name.
-        final Matcher matcher = Pattern.compile(".*\\.([^\\.]*)").matcher(srcKey.toLowerCase());
+         Matcher matcher = Pattern.compile(".*\\.([^\\.]*)").matcher(srcKey.toLowerCase());
         if (!matcher.matches()) {
             System.out.println("Unable to infer image type for key " + srcKey);
             return "";
         }
 
-        final String imageType = matcher.group(1);
+        String imageType = matcher.group(1);
         if (!(JPG_TYPE.equals(imageType)) && !(PNG_TYPE.equals(imageType)) && !(PDF_TYPE.equals(imageType))) {
             System.out.println("Skipping non-image " + srcKey);
             return "";
@@ -91,39 +91,39 @@ public class App implements RequestHandler<S3Event, String> {
 
     }
 
-    private void processDocument(final String srcBucket, final String srcKey) {
+    private void processDocument(String srcBucket, String srcKey) {
 
         // Use Textract to process the document
-        final List<Block> blocks = extractText(srcBucket, srcKey);
+        List<Block> blocks = extractText(srcBucket, srcKey);
 
         // Convert the blocks for lines of text into strings
-        final List<String> ids = new ArrayList<String>();
-        final List<String> text = new ArrayList<String>();
+        List<String> ids = new ArrayList<String>();
+        List<String> text = new ArrayList<String>();
         blocks.forEach(block -> {
             ids.add(block.getId());
             text.add(block.getText());
         });
 
         // Use Comprehend to process the text.
-        final List<BatchDetectEntitiesItemResult> entities = getEntities(text);
+        List<BatchDetectEntitiesItemResult> entities = getEntities(text);
 
         System.out.println("Saving analysis to dynamodb");
         writeDocumentToDynamoDB(ids, text, entities, srcKey);
 
     }
 
-    private List<Block> extractText(final String bucketName, final String documentName) {
+    private List<Block> extractText(String bucketName, String documentName) {
         System.out.println("Using textract to identify text in the document.");
 
-        final S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
+        S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
 
-        final DetectDocumentTextRequest request = new DetectDocumentTextRequest()
+        DetectDocumentTextRequest request = new DetectDocumentTextRequest()
                 .withDocument(new Document().withS3Object(document));
 
-        final DetectDocumentTextResult result = textract.detectDocumentText(request);
+        DetectDocumentTextResult result = textract.detectDocumentText(request);
 
         // Keep the non-empty lines of text and ignore the individual words
-        final List<Block> filteredResults = new ArrayList<Block>();
+        List<Block> filteredResults = new ArrayList<Block>();
         result.getBlocks().forEach(block -> {
             if (block.getBlockType().equals("LINE") && !(block.getText() == null)) {
                 filteredResults.add(block);
@@ -134,24 +134,24 @@ public class App implements RequestHandler<S3Event, String> {
 
     }
 
-    private List<BatchDetectEntitiesItemResult> getEntities(final List<String> text) {
+    private List<BatchDetectEntitiesItemResult> getEntities(List<String> text) {
 
         System.out.println("Using comprehend to process " + String.valueOf(text.size()) + " entities.");
 
-        final AmazonComprehend comprehendClient = AmazonComprehendClientBuilder.standard().build();
-        final List<BatchDetectEntitiesItemResult> results = new ArrayList<BatchDetectEntitiesItemResult>();
+        AmazonComprehend comprehendClient = AmazonComprehendClientBuilder.standard().build();
+        List<BatchDetectEntitiesItemResult> results = new ArrayList<BatchDetectEntitiesItemResult>();
 
         // Detect Entities for each line of text in batches of up to 25
         for (int current = 0; current < text.size();) {
 
-            final int batchSize = Math.min(text.size() - current, MAX_TEXTRACT_BATCH_SIZE);
-            final List<String> batch = text.subList(current, current + batchSize);
+            int batchSize = Math.min(text.size() - current, MAX_TEXTRACT_BATCH_SIZE);
+            List<String> batch = text.subList(current, current + batchSize);
 
-            final BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest()
+            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest()
                     .withTextList(batch)
                     .withLanguageCode("en");
 
-            final BatchDetectEntitiesResult batchDetectEntitiesResult = comprehendClient
+            BatchDetectEntitiesResult batchDetectEntitiesResult = comprehendClient
                     .batchDetectEntities(batchDetectEntitiesRequest);
 
             results.addAll(batchDetectEntitiesResult.getResultList());
@@ -164,18 +164,18 @@ public class App implements RequestHandler<S3Event, String> {
 
     }
 
-    private void writeDocumentToDynamoDB(final List<String> ids, final List<String> text,
-            final List<BatchDetectEntitiesItemResult> entities, final String srcKey) {
+    private void writeDocumentToDynamoDB(List<String> ids, List<String> text,
+            List<BatchDetectEntitiesItemResult> entities, String srcKey) {
 
         // Build up item objects for the current document
-        final List<Item> items = new ArrayList<Item>();
+        List<Item> items = new ArrayList<Item>();
         for (int i = 0; i < ids.size(); i++) {
 
             // Build list of detected entities for each item
-            final List<Map<String, String>> itemEntityList = new ArrayList<Map<String, String>>();
+            List<Map<String, String>> itemEntityList = new ArrayList<Map<String, String>>();
 
             entities.get(i).getEntities().forEach(entity -> {
-                final Map<String, String> itemEntity = new HashMap<String, String>();
+                Map<String, String> itemEntity = new HashMap<String, String>();
 
                 itemEntity.put("text", entity.getText());
                 itemEntity.put("type", entity.getType());
@@ -200,9 +200,9 @@ public class App implements RequestHandler<S3Event, String> {
         // Write items to DynamoDB using batches of up to 100
         for (int current = 0; current < ids.size();) {
 
-            final int batchSize = Math.min(ids.size() - current, MAX_DYNAMODB_BATCH_SIZE);
-            final List<Item> batch = items.subList(current, current + batchSize);
-            final TableWriteItems tableWriteItems = new TableWriteItems(TABLE_NAME);
+            int batchSize = Math.min(ids.size() - current, MAX_DYNAMODB_BATCH_SIZE);
+            List<Item> batch = items.subList(current, current + batchSize);
+            TableWriteItems tableWriteItems = new TableWriteItems(TABLE_NAME);
             
             batch.forEach(item->{
                 tableWriteItems.addItemToPut(item);
