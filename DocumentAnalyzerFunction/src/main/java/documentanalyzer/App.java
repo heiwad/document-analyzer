@@ -149,7 +149,31 @@ public class App  {
 
     private List<BatchDetectEntitiesItemResult> getEntities(List<String> text) {
 
-        return null;
+        System.out.println("Using comprehend to process " + String.valueOf(text.size()) + " entities.");
+
+        AmazonComprehend comprehendClient = AmazonComprehendClientBuilder.standard().build();
+        List<BatchDetectEntitiesItemResult> results = new ArrayList<BatchDetectEntitiesItemResult>();
+
+        // Detect Entities for each line of text in batches of up to 25
+        for (int current = 0; current < text.size();) {
+            
+            int batchSize = Math.min(text.size()-current, MAX_TEXTRACT_BATCH_SIZE);
+            List<String> batch = text.subList(current, current + batchSize);
+
+            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest()
+                    .withTextList(batch)
+                    .withLanguageCode("en");
+
+            BatchDetectEntitiesResult batchDetectEntitiesResult = comprehendClient
+                    .batchDetectEntities(batchDetectEntitiesRequest);
+
+            results.addAll(batchDetectEntitiesResult.getResultList());
+            current = current + batchSize;
+
+        }
+        System.out.println("Processed entities");
+        System.out.println(results);
+        return results;
 
     }
 
