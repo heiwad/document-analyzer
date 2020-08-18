@@ -114,6 +114,8 @@ public class App implements RequestHandler<S3Event, String> {
 
     private List<Block> extractText(String bucketName, String documentName) {
         System.out.println("Using textract to identify text in the document.");
+            
+        S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
 
         S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
 
@@ -133,6 +135,7 @@ public class App implements RequestHandler<S3Event, String> {
         return filteredResults;
 
     }
+    
 
     private List<BatchDetectEntitiesItemResult> getEntities(List<String> text) {
 
@@ -143,6 +146,12 @@ public class App implements RequestHandler<S3Event, String> {
 
         // Detect Entities for each line of text in batches of up to 25
         for (int current = 0; current < text.size();) {
+            
+            int batchSize = Math.min(text.size()-current, MAX_TEXTRACT_BATCH_SIZE);
+            List<String> batch = text.subList(current, current + batchSize);
+            
+            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(batch)
+                .withLanguageCode("en");
 
             int batchSize = Math.min(text.size() - current, MAX_TEXTRACT_BATCH_SIZE);
             List<String> batch = text.subList(current, current + batchSize);
