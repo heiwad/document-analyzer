@@ -35,8 +35,8 @@ import com.amazonaws.services.dynamodbv2.document.TableWriteItems;
 /**
  * Handler for requests to Lambda function.
  */
-public class App implements RequestHandler<S3Event, String> {
-
+//public class App implements RequestHandler<S3Event,String> {
+public class App  {
     private final String JPG_TYPE = (String) "jpg";
     private final String PNG_TYPE = (String) "png";
     private final String PDF_TYPE = (String) "pdf";
@@ -63,7 +63,7 @@ public class App implements RequestHandler<S3Event, String> {
 
     }
 
-    public String handleRequest(S3Event s3event,  Context context) {
+    public void handleRequest(S3Event s3event,  Context context) {
 
         S3EventNotificationRecord record = s3event.getRecords().get(0);
         String srcBucket = record.getS3().getBucket().getName();
@@ -74,20 +74,21 @@ public class App implements RequestHandler<S3Event, String> {
          Matcher matcher = Pattern.compile(".*\\.([^\\.]*)").matcher(srcKey.toLowerCase());
         if (!matcher.matches()) {
             System.out.println("Unable to infer image type for key " + srcKey);
-            return "";
+            return;
         }
 
+        //TODO: Implement support for extracting images from PDF document.
         String imageType = matcher.group(1);
-        if (!(JPG_TYPE.equals(imageType)) && !(PNG_TYPE.equals(imageType)) && !(PDF_TYPE.equals(imageType))) {
-            System.out.println("Skipping non-image " + srcKey);
-            return "";
+        if (!(JPG_TYPE.equals(imageType)) && !(PNG_TYPE.equals(imageType))) {
+            System.out.println("Skipping non-image " + srcKey);    
+            return;
         }
 
         System.out.println("Invoked with valid document: " + srcBucket + "/" + srcKey);
 
         processDocument(srcBucket, srcKey);
 
-        return srcKey;
+        return;
 
     }
 
@@ -115,8 +116,6 @@ public class App implements RequestHandler<S3Event, String> {
     private List<Block> extractText(String bucketName, String documentName) {
         System.out.println("Using textract to identify text in the document.");
             
-        S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
-
         S3Object document = new S3Object().withBucket(bucketName).withName(documentName);
 
         DetectDocumentTextRequest request = new DetectDocumentTextRequest()
@@ -148,12 +147,6 @@ public class App implements RequestHandler<S3Event, String> {
         for (int current = 0; current < text.size();) {
             
             int batchSize = Math.min(text.size()-current, MAX_TEXTRACT_BATCH_SIZE);
-            List<String> batch = text.subList(current, current + batchSize);
-            
-            BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest().withTextList(batch)
-                .withLanguageCode("en");
-
-            int batchSize = Math.min(text.size() - current, MAX_TEXTRACT_BATCH_SIZE);
             List<String> batch = text.subList(current, current + batchSize);
 
             BatchDetectEntitiesRequest batchDetectEntitiesRequest = new BatchDetectEntitiesRequest()
@@ -206,7 +199,7 @@ public class App implements RequestHandler<S3Event, String> {
 
         }
 
-        // Write items to DynamoDB using batches of up to 100
+        // Write items to DynamoDB using batches of up to 25
         for (int current = 0; current < ids.size();) {
 
             int batchSize = Math.min(ids.size() - current, MAX_DYNAMODB_BATCH_SIZE);
